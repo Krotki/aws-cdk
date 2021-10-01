@@ -413,6 +413,32 @@ describe('cluster resource provider', () => {
 
     });
 
+    test('service ip range cannot be updated', async () => {
+      // GIVEN
+      const handler = new ClusterResourceHandler(mocks.client, mocks.newRequest('Update', {
+        kubernetesNetworkConfig: {
+          serviceIpv4Cidr: '10.100.0.0/16',
+        },
+      }, {
+        kubernetesNetworkConfig: {
+          serviceIpv4Cidr: '10.200.0.0/16',
+        },
+      }));
+
+      // WHEN
+      let error: any;
+      try {
+        await handler.onEvent();
+      } catch (e) {
+        error = e;
+      }
+
+      // THEN
+      expect(error).toBeDefined();
+      expect(error.message).toEqual('Property serviceIpv4Cidr can be set only on cluster create and cannot be updated later');
+
+    });
+
     describe('isUpdateComplete with EKS update ID', () => {
 
       test('with "Failed" status', async () => {

@@ -24,6 +24,7 @@ export interface ClusterResourceProps {
   readonly environment?: { [key: string]: string };
   readonly subnets?: ec2.ISubnet[];
   readonly secretsEncryptionKey?: kms.IKey;
+  readonly kubernetesNetworkConfig?: CfnCluster.KubernetesNetworkConfigProperty;
 }
 
 /**
@@ -82,6 +83,7 @@ export class ClusterResource extends CoreConstruct {
             endpointPrivateAccess: props.endpointPrivateAccess,
             publicAccessCidrs: props.publicAccessCidrs,
           },
+          kubernetesNetworkConfig: props.kubernetesNetworkConfig,
         },
         AssumeRoleArn: this.adminRole.roleArn,
 

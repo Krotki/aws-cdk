@@ -110,6 +110,12 @@ export class ClusterResourceHandler extends ResourceHandler {
       throw new Error('Cannot update cluster encryption configuration');
     }
 
+    // updates to kubernetesNetworkConfig.serviceIpv4Cidr property are not supported after creation
+    if (this.oldProps.kubernetesNetworkConfig?.serviceIpv4Cidr !== this.newProps.kubernetesNetworkConfig?.serviceIpv4Cidr) {
+      throw new Error('Property serviceIpv4Cidr can be set only on cluster create and cannot be updated later');
+    }
+
+
     // if there is an update that requires replacement, go ahead and just create
     // a new cluster with the new config. The old cluster will automatically be
     // deleted by cloudformation upon success.
