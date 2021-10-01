@@ -25,11 +25,8 @@ export interface ClusterResourceProps {
   readonly environment?: { [key: string]: string };
   readonly subnets?: ec2.ISubnet[];
   readonly secretsEncryptionKey?: kms.IKey;
-<<<<<<< HEAD
   readonly kubernetesNetworkConfig?: CfnCluster.KubernetesNetworkConfigProperty;
-=======
   readonly onEventLayer?: lambda.ILayerVersion;
->>>>>>> master
 }
 
 /**

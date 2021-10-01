@@ -1283,15 +1283,12 @@ export class Cluster extends ClusterBase {
       secretsEncryptionKey: props.secretsEncryptionKey,
       vpc: this.vpc,
       subnets: placeClusterHandlerInVpc ? privateSubents : undefined,
-<<<<<<< HEAD
       ...(props.serviceIpv4Cidr ? {
         kubernetesNetworkConfig: {
           serviceIpv4Cidr: props.serviceIpv4Cidr,
         },
       } : {}),
-=======
       onEventLayer: this.onEventLayer,
->>>>>>> master
     });
 
     if (this.endpointAccess._config.privateAccess && privateSubents.length !== 0) {
