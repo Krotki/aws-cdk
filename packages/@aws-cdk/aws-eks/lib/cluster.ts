@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as autoscaling from '@aws-cdk/aws-autoscaling';
 import * as ec2 from '@aws-cdk/aws-ec2';
+import { CidrBlock } from '@aws-cdk/aws-ec2/lib/network-util';
 import * as iam from '@aws-cdk/aws-iam';
 import * as kms from '@aws-cdk/aws-kms';
 import * as lambda from '@aws-cdk/aws-lambda';
@@ -576,7 +577,6 @@ export class EndpointAccess {
  * Common configuration props for EKS clusters.
  */
 export interface ClusterProps extends ClusterOptions {
-
   /**
    * Number of instances to allocate as an initial capacity for this cluster.
    * Instance type can be configured through `defaultCapacityInstanceType`,
@@ -603,6 +603,25 @@ export interface ClusterProps extends ClusterOptions {
    * @default NODEGROUP
    */
   readonly defaultCapacityType?: DefaultCapacityType;
+
+  /**
+   * The CIDR block to assign Kubernetes service IP addresses from.
+   * If you don't specify a block, Kubernetes assigns addresses from either the 10.100.0.0/16
+   * or 172.20.0.0/16 CIDR blocks. We recommend that you specify a block that does not overlap
+   * with resources in other networks that are peered or connected to your VPC.
+   * The block must meet the following requirements:
+   *
+   * Within one of the following private IP address blocks: 10.0.0.0/8, 172.16.0.0/12, or 192.168.0.0/16.
+   *
+   * Doesn't overlap with any CIDR block assigned to the VPC that you selected for VPC.
+   *
+   * Between /24 and /12.
+   *
+   * Important: You can only specify a custom CIDR block when you create a cluster and can't change this value once the cluster is created.
+   *
+   * @default undefined If you don't specify a block, Kubernetes assigns addresses from either the 10.100.0.0/16 or 172.20.0.0/16 CIDR blocks.
+   */
+  readonly serviceIpv4Cidr?: string;
 }
 
 /**
@@ -904,6 +923,21 @@ export class Cluster extends ClusterBase {
   public readonly prune: boolean;
 
   /**
+   * The CIDR block to assign Kubernetes service IP addresses from. If you don't specify a block, Kubernetes assigns addresses from either the 10.100.0.0/16 or 172.20.0.0/16 CIDR blocks. We recommend that you specify a block that does not overlap with resources in other networks that are peered or connected to your VPC. The block must meet the following requirements:
+   *
+   * Within one of the following private IP address blocks: 10.0.0.0/8, 172.16.0.0/12, or 192.168.0.0/16.
+   *
+   * Doesn't overlap with any CIDR block assigned to the VPC that you selected for VPC.
+   *
+   * Between /24 and /12.
+   *
+   * Important: You can only specify a custom CIDR block when you create a cluster and can't change this value once the cluster is created.
+   *
+   * @default undefined If you don't specify a block, Kubernetes assigns addresses from either the 10.100.0.0/16 or 172.20.0.0/16 CIDR blocks.
+   */
+  public readonly serviceIpv4Cidr?: String;
+
+  /**
    * If this cluster is kubectl-enabled, returns the `ClusterResource` object
    * that manages it. If this cluster is not kubectl-enabled (i.e. uses the
    * stock `CfnCluster`), this is `undefined`.
@@ -1014,6 +1048,26 @@ export class Cluster extends ClusterBase {
       throw new Error('Cannot place cluster handler in the VPC since no private subnets could be selected');
     }
 
+    this.serviceIpv4Cidr = props.serviceIpv4Cidr;
+    const serviceIpv4CidrBlock = props.serviceIpv4Cidr ? new CidrBlock(props.serviceIpv4Cidr) : undefined;
+
+    if (serviceIpv4CidrBlock && serviceIpv4CidrBlock.mask < 12 && serviceIpv4CidrBlock.mask > 24) {
+      throw new Error('ServiceIpv4Cidr mask must be between /24 and /12');
+    }
+
+    if (serviceIpv4CidrBlock &&
+      !new CidrBlock('10.0.0.0/8').containsCidr(serviceIpv4CidrBlock) &&
+      !new CidrBlock('172.16.0.0/12').containsCidr(serviceIpv4CidrBlock) &&
+      !new CidrBlock('192.168.0.0/16').containsCidr(serviceIpv4CidrBlock)
+    ) {
+      throw new Error('ServiceIpv4Cidr has to be within one of the following private IP address blocks: 10.0.0.0/8, 172.16.0.0/12, or 192.168.0.0/16.');
+    }
+
+    const vpcCidrBlock = new CidrBlock(this.vpc.vpcCidrBlock);
+    if (serviceIpv4CidrBlock && !vpcCidrBlock.containsCidr(serviceIpv4CidrBlock) && !serviceIpv4CidrBlock.containsCidr(vpcCidrBlock) ) {
+      throw new Error('ServiceIpv4Cidr can not overlap with any CIDR block assigned to the VPC.');
+    }
+
     const resource = this._clusterResource = new ClusterResource(this, 'Resource', {
       name: this.physicalName,
       environment: props.clusterHandlerEnvironment,
@@ -1037,6 +1091,11 @@ export class Cluster extends ClusterBase {
       secretsEncryptionKey: props.secretsEncryptionKey,
       vpc: this.vpc,
       subnets: placeClusterHandlerInVpc ? privateSubents : undefined,
+      ...(props.serviceIpv4Cidr ? {
+        kubernetesNetworkConfig: {
+          serviceIpv4Cidr: props.serviceIpv4Cidr,
+        },
+      } : {}),
     });
 
     if (this.endpointAccess._config.privateAccess && privateSubents.length !== 0) {
